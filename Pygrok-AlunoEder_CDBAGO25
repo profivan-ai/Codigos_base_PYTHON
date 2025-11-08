@@ -1,0 +1,102 @@
+
+#!pip install streamlit pyngrok
+
+# 2º passo
+# %%writefile cria um arquivo Python chamado 'app.py' com todo o código desta célula.
+# Isso é necessário no Colab porque o Streamlit e o ngrok precisam de um arquivo físico
+# para rodar o app. Sem isso, os gráficos e a interface não seriam exibidos pelo túnel ngrok.
+
+
+
+# ===============================
+# Importação das bibliotecas
+# ===============================
+import os
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+from pyngrok import ngrok
+
+# =================================================================
+
+# Caminho simples (mesmo diretório do Colab)
+arquivo = 'consultas.csv'
+
+# Verifica se o arquivo existe antes de ler
+if not os.path.exists(arquivo):
+    st.error(f"Arquivo '{arquivo}' não encontrado. Envie o arquivo e recarregue o app.")
+    st.stop()
+
+# Lê o CSV
+df = pd.read_csv(arquivo, parse_dates=['dataconsulta'])
+
+# ===============================
+# Configuração e exibição no Streamlit
+# ===============================
+st.set_page_config(page_title='Painel de Consultas Médicas', layout='wide')
+
+# Combo das datas
+data_unicas = sorted(df['dataconsulta'].dt.strftime('%d-%m-%y').unique())
+opcao_data = st.sidebar.selectbox('Selecione a Data:', options=['Todas'] + data_unicas)
+
+# Combo das unidades
+unidade = sorted(df['unidade'].unique())
+opcao_unidade = st.sidebar.selectbox('Selecione a Unidade:', options=['Todas'] + unidade)
+
+# Faz uma cópia do DataFrame original
+df_filtrado = df.copy()
+
+# Filtro por data
+if opcao_data != 'Todas':
+    df_filtrado = df_filtrado[df_filtrado['dataconsulta'].dt.strftime('%d-%m-%y') == opcao_data]
+
+# Filtro por unidade
+if opcao_unidade != 'Todas':
+    df_filtrado = df_filtrado[df_filtrado['unidade'] == opcao_unidade]
+
+# ===============================
+# Gráficos
+# ===============================
+st.title('📊 Painel de Consultas Médicas')
+
+# criação das colunas
+
+col1, col2, col3 = st.columns(3)
+
+
+# Gráfico 1 - Consultas por unidade - criação do filtro
+consultas_unidade = df_filtrado.groupby('unidade').size().reset_index(name='Total')
+
+# Criação do gráfico
+fig1 = px.bar(consultas_unidade, x='unidade', y='Total', color='unidade',
+              title=f'🩺 Consultas por Unidade ({opcao_data})', text='Total')
+fig1.update_layout(xaxis_title='Unidade', yaxis_title='Total de Consultas')
+
+# Visualização do gráfico
+col1.plotly_chart(fig1, use_container_width=True)
+
+# Gráfico 2 - Consultas por especialidade - criação do filtro
+consultas_tipo = df_filtrado.groupby('tipoconsulta').size().reset_index(name='Total')
+
+# Criação do gráfico
+fig2 = px.pie(consultas_tipo, values='Total', names='tipoconsulta',
+              title='👨‍⚕️ Consultas por Especialidade', hole=0.4)
+
+# Visualização do gráfico
+col2.plotly_chart(fig2, use_container_width=True)
+
+# Gráfico 3 - Faturamento por unidade - criação do filtro
+faturamento_unidade = df_filtrado.groupby('unidade', as_index=False)['valor'].sum()
+
+# Criação do gráfico
+fig3 = px.bar(faturamento_unidade, x='unidade', y='valor', color='unidade',
+              title='🥇 Faturamento Total por Unidade',
+              text=faturamento_unidade['valor'].map('R$ {:,.2f}'.format))
+fig3.update_layout(xaxis_title='Unidade', yaxis_title='Total de Faturamento')
+
+# Visualização do gráfico
+col3.plotly_chart(fig3, use_container_width=True)
+
+# Tabela de registros
+st.subheader(f'📋 Registros: ({opcao_unidade})')
+st.dataframe(df_filtrado, use_container_width=True)
